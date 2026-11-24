@@ -169,6 +169,8 @@ private val UnderlineHeight = 3.dp
 private val UnderlineBottom = 11.dp
 private val BadgeDotSize = 6.dp
 private val BadgeRing = 2.dp
+/** Corner radius of the rail's active tile. */
+private val TileCorner = 12.dp
 
 /**
  * The bar palette for the theme around it, crossfaded.
