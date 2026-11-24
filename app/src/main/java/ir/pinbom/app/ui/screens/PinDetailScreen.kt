@@ -1,5 +1,6 @@
 package ir.pinbom.app.ui.screens
 
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.draw.clip
