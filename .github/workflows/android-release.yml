@@ -40,8 +40,9 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
         with:
-          # Keep this on ONE line. The action expects a whitespace-separated list.
-          packages: 'platform-tools platforms;android-37 build-tools;36.0.0 build-tools;37.0.0 ndk;28.2.13676358 cmake;3.22.1'
+          # "platforms;android-37.0" حذف شد تا Gradle خودش پلتفرم را Resolve کند.
+          # build-tools و NDK و CMake همچنان نصب می‌شوند.
+          packages: 'platform-tools build-tools;37.0.0 ndk;28.2.13676358 cmake;3.22.1'
 
       - name: Check release signing secrets and decode JKS
         env:
@@ -69,8 +70,8 @@ jobs:
           test -s "$KEYSTORE_PATH"
           chmod 600 "$KEYSTORE_PATH"
 
+          # -storetype JKS حذف شد تا با PKCS12 هم سازگار باشد.
           keytool -list \
-            -storetype JKS \
             -keystore "$KEYSTORE_PATH" \
             -storepass "$ANDROID_KEYSTORE_PASSWORD" \
             -alias "$ANDROID_KEY_ALIAS" >/dev/null
@@ -95,8 +96,6 @@ jobs:
             exit 1
           fi
 
-          # HTTPS is preferred. Until the server has HTTPS, only the project's
-          # explicitly configured temporary HTTP endpoint is permitted.
           case "$API_BASE_URL" in
             https://*) ;;
             http://185.26.33.188:8080/) ;;
@@ -182,10 +181,19 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gh release create "$GITHUB_REF_NAME" \
-            dist/*.apk \
-            dist/*.aab \
-            dist/SHA256SUMS.txt \
-            --verify-tag \
-            --title "PinBom $GITHUB_REF_NAME" \
-            --generate-notes
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "Release $GITHUB_REF_NAME already exists; uploading assets with --clobber."
+            gh release upload "$GITHUB_REF_NAME" \
+              dist/*.apk \
+              dist/*.aab \
+              dist/SHA256SUMS.txt \
+              --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" \
+              dist/*.apk \
+              dist/*.aab \
+              dist/SHA256SUMS.txt \
+              --verify-tag \
+              --title "PinBom $GITHUB_REF_NAME" \
+              --generate-notes
+          fi
