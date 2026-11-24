@@ -40,9 +40,8 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
         with:
-          # "platforms;android-37.0" حذف شد تا Gradle خودش پلتفرم را Resolve کند.
-          # build-tools و NDK و CMake همچنان نصب می‌شوند.
-          packages: 'platform-tools build-tools;37.0.0 ndk;28.2.13676358 cmake;3.22.1'
+          # Keep this on ONE line. The action expects a whitespace-separated list.
+          packages: 'platform-tools platforms;android-37.0 build-tools;36.0.0 ndk;28.2.13676358 cmake;3.22.1'
 
       - name: Check release signing secrets and decode JKS
         env:
@@ -70,8 +69,8 @@ jobs:
           test -s "$KEYSTORE_PATH"
           chmod 600 "$KEYSTORE_PATH"
 
-          # -storetype JKS حذف شد تا با PKCS12 هم سازگار باشد.
           keytool -list \
+            -storetype JKS \
             -keystore "$KEYSTORE_PATH" \
             -storepass "$ANDROID_KEYSTORE_PASSWORD" \
             -alias "$ANDROID_KEY_ALIAS" >/dev/null
@@ -91,25 +90,30 @@ jobs:
             API_BASE_URL="${REPOSITORY_API_BASE_URL:-}"
           fi
 
+          # Trim accidental spaces/newlines copied into the GitHub variable.
+          API_BASE_URL="$(printf '%s' "$API_BASE_URL" | tr -d '\r\n' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+
           if [[ -z "$API_BASE_URL" ]]; then
-            echo 'Set the PINBOM_API_BASE_URL repository variable or provide api_base_url when manually starting this workflow.' >&2
+            echo 'PINBOM_API_BASE_URL is empty. Set it under Settings > Secrets and variables > Actions > Variables.' >&2
             exit 1
           fi
 
+          # A trailing slash is optional in the GitHub variable; normalize it here.
+          API_BASE_URL="${API_BASE_URL%/}"
+
+          # HTTPS is preferred. Until HTTPS is configured, only the exact HTTP
+          # host and port already allowed by the Android app are accepted.
           case "$API_BASE_URL" in
             https://*) ;;
-            http://185.26.33.188:8080/) ;;
+            http://185.26.33.188:8080) ;;
             *)
-              echo 'API URL must use HTTPS, or exactly http://185.26.33.188:8080/ while the temporary HTTP endpoint is in use.' >&2
+              echo "Unsupported API URL: $API_BASE_URL" >&2
+              echo 'Use an HTTPS URL, or exactly http://185.26.33.188:8080 (temporary HTTP endpoint).' >&2
               exit 1
               ;;
           esac
 
-          if [[ "$API_BASE_URL" != */ ]]; then
-            echo 'API URL must end with /' >&2
-            exit 1
-          fi
-
+          API_BASE_URL="$API_BASE_URL/"
           echo "PINBOM_API_BASE_URL=$API_BASE_URL" >> "$GITHUB_ENV"
           echo "Using API base URL: $API_BASE_URL"
 
@@ -138,7 +142,7 @@ jobs:
           set -euo pipefail
           APK_PATH="app/build/outputs/apk/release/app-release.apk"
           test -s "$APK_PATH"
-          "$ANDROID_SDK_ROOT/build-tools/37.0.0/apksigner" verify --verbose --print-certs "$APK_PATH"
+          "$ANDROID_SDK_ROOT/build-tools/36.0.0/apksigner" verify --verbose --print-certs "$APK_PATH"
 
       - name: Prepare release files and SHA256 checksums
         shell: bash
@@ -181,19 +185,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            echo "Release $GITHUB_REF_NAME already exists; uploading assets with --clobber."
-            gh release upload "$GITHUB_REF_NAME" \
-              dist/*.apk \
-              dist/*.aab \
-              dist/SHA256SUMS.txt \
-              --clobber
-          else
-            gh release create "$GITHUB_REF_NAME" \
-              dist/*.apk \
-              dist/*.aab \
-              dist/SHA256SUMS.txt \
-              --verify-tag \
-              --title "PinBom $GITHUB_REF_NAME" \
-              --generate-notes
-          fi
+          gh release create "$GITHUB_REF_NAME" \
+            dist/*.apk \
+            dist/*.aab \
+            dist/SHA256SUMS.txt \
+            --verify-tag \
+            --title "PinBom $GITHUB_REF_NAME" \
+            --generate-notes
