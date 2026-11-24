@@ -1,15 +1,18 @@
 package ir.pinbom.app.work
 
+import android.Manifest
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 import androidx.work.ForegroundInfo
 import ir.pinbom.app.MainActivity
 import ir.pinbom.app.R
@@ -70,6 +73,18 @@ object UploadNotifications {
         )
     }
 
+    /**
+     * Whether posting notifications is allowed at all.
+     * On Android 13+ the runtime POST_NOTIFICATIONS grant is required; below 13
+     * the permission does not exist and notifications are implicitly allowed.
+     */
+    private fun canPostNotifications(context: Context): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.POST_NOTIFICATIONS,
+            ) == PackageManager.PERMISSION_GRANTED
+
     private fun tap(context: Context): PendingIntent = PendingIntent.getActivity(
         context,
         0,
@@ -104,6 +119,7 @@ object UploadNotifications {
 
     /** Re-paint the ongoing notification in place — cheaper than re-entering the service. */
     fun update(context: Context, percent: Int, stage: UploadStage) {
+        if (!canPostNotifications(context)) return
         runCatching {
             NotificationManagerCompat.from(context)
                 .notify(ID, foregroundNotification(context, percent, stage))
@@ -127,6 +143,7 @@ object UploadNotifications {
             .setCategory(NotificationCompat.CATEGORY_STATUS)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
+        if (!canPostNotifications(context)) return
         runCatching {
             NotificationManagerCompat.from(context).notify(ID_SUMMARY, notification)
         }
