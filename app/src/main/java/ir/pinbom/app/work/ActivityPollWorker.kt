@@ -1,13 +1,16 @@
 package ir.pinbom.app.work
 
+import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
@@ -90,7 +93,18 @@ class ActivityPollWorker @AssistedInject constructor(
             .setOnlyAlertOnce(true)
             .setNumber(fresh.size)
         if (fresh.size > 1) builder.setSubText("+${fresh.size - 1}")
-        runCatching { manager.notify(NOTIFICATION_ID, builder.build()) }
+
+        // Explicit runtime-permission check to satisfy Lint's MissingPermission.
+        // On Android < 13 the permission does not exist and is implicitly granted.
+        val canPost = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            ContextCompat.checkSelfPermission(
+                applicationContext,
+                Manifest.permission.POST_NOTIFICATIONS,
+            ) == PackageManager.PERMISSION_GRANTED
+
+        if (canPost) {
+            runCatching { manager.notify(NOTIFICATION_ID, builder.build()) }
+        }
 
         prefs.edit().putLong(lastKey, latestId).apply()
         return Result.success()
